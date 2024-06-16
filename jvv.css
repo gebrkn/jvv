@@ -1,0 +1,240 @@
+
+.jvv * {
+    font-family: "JetBrains Mono", Monaco, Courier, monospace;
+    font-size: 12px;
+}
+
+.jvv {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.jvv-top {
+    padding: 0.7em;
+    display: flex;
+    align-items: center;
+}
+
+.jvv-tree {
+    overflow: auto;
+    flex: 1;
+}
+
+.jvv-flex {
+    flex: 1;
+}
+
+
+/* ---------------------------------------------------------------------------------- */
+
+.jvv button {
+    background-color: transparent;
+    background-position: center;
+    background-size: 16px;
+    background-repeat: no-repeat;
+    border: none;
+    cursor: pointer;
+    max-height: 20px;
+    max-width: 20px;
+    min-height: 20px;
+    min-width: 20px;
+    padding: 0;
+}
+
+/* ---------------------------------------------------------------------------------- */
+
+.jvv-search-box {
+    width: 20em;
+    margin-right: 0.4em;
+    padding-right: 0.4em;
+    border-radius: 10px;
+    background: #d7d7d7;
+    display: flex;
+    align-items: center;
+}
+
+.jvv-search-box input {
+    border: none;
+    background: none;
+    padding: 0.4em 0.8em;
+    flex: 1;
+}
+
+.jvv-search-box input:focus {
+    outline: none;
+}
+
+.jvv-search-info {
+    padding: 0 1em;
+    font-size: 0.9em;
+    display: none;
+}
+
+.jvv-has-search .jvv-search-info {
+    display: inline;
+}
+
+.jvv-search-next-button,
+.jvv-search-prev-button {
+    display: none;
+}
+
+.jvv-has-search-results .jvv-search-next-button,
+.jvv-has-search-results .jvv-search-prev-button {
+    display: inline;
+}
+
+.jvv-search-reset-button {
+    display: none;
+}
+
+.jvv-has-search .jvv-search-reset-button {
+    display: inline;
+}
+
+
+/* ---------------------------------------------------------------------------------- */
+
+.jvv-head {
+    display: flex;
+    align-items: center;
+    padding: 0.2em 0;
+    transition: background-color 0.5s ease;
+}
+
+.jvv-body {
+    padding-left: 2em;
+
+}
+
+.jvv-array-key {
+    margin-right: 1em;
+    min-width: 5em;
+    text-align: right;
+}
+
+.jvv-object-key {
+    margin-right: 1em;
+}
+
+.jvv-more {
+    padding: 0.3em 0.5em;
+    border-radius: 8px;
+    display: inline-block;
+    cursor: pointer;
+    margin: 0.5em 0;
+    font-size: 0.9em;
+}
+
+.jvv-val-string {
+    overflow-wrap: break-word;
+    word-break: break-all;
+}
+
+.jvv-body, .jvv-paren {
+    display: none;
+}
+
+.jvv-row.jvv-open > .jvv-body {
+    display: block;
+}
+
+.jvv-row.jvv-open > .jvv-head > .jvv-paren,
+.jvv-row.jvv-open > .jvv-foot > .jvv-paren {
+    display: block;
+}
+
+.jvv-expand-button {
+    transition: all 0.2s;
+}
+
+.jvv-row.jvv-open > .jvv-head > .jvv-expand-button {
+    transform: rotate(90deg);
+}
+
+
+/* ---------------------------------------------------------------------------------- */
+
+.jvv {
+    background-color: #ececec;
+    color: #333;
+}
+
+.jvv-top {
+    background-color: #3f3f3f;
+    color: #eee;
+}
+
+.jvv-row.jvv-found > .jvv-head {
+    background-color: #e9e3cd;
+}
+
+.jvv-row.jvv-found-curr > .jvv-head {
+    background-color: #ffe88f;
+}
+
+.jvv-row {
+    border-top: 1px dotted #d5d5d5;
+}
+
+.jvv-array-key {
+    color: #b97713;
+}
+
+.jvv-object-key {
+    color: #b9139d;
+}
+
+.jvv-preview {
+    color: #9a9a9a;
+}
+
+.jvv-val-string {
+    color: #182d91;
+}
+
+.jvv-val-number {
+    color: #08852f;
+}
+
+.jvv-val-boolean {
+    color: #64481a;
+}
+
+.jvv-val-null {
+    color: #595959;
+}
+
+.jvv-more {
+    background-color: #d0d0d0;
+    color: #797979;
+}
+
+/* https://fonts.google.com/icons */
+
+.jvv-expand-button {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>');
+}
+
+.jvv-search-prev-button {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="rgb(207,207,207)" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>');
+    transform: rotate(-90deg);
+}
+
+.jvv-search-next-button {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="rgb(207,207,207)" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>');
+    transform: rotate(90deg);
+}
+
+.jvv-search-reset-button {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px"><path fill="rgb(132,132,132)" d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>');
+}
+
+.jvv-collapse-all-button {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 -960 960 960"><path fill="rgb(207,207,207)" d="m296-80-56-56 240-240 240 240-56 56-184-184L296-80Zm184-504L240-824l56-56 184 184 184-184 56 56-240 240Z"/></svg>');
+}
+
+.jvv-expand-all-button {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960"><path fill="rgb(207,207,207)" d="M480-80 240-320l57-57 183 183 183-183 57 57L480-80ZM298-584l-58-56 240-240 240 240-58 56-182-182-182 182Z"/></svg>');
+}
