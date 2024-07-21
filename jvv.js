@@ -1,615 +1,332 @@
 class JsonViewer {
 
-    constructor(data) {
+    MAX_DEPTH = 1000
+    MAX_ARRAY_LIMIT = 20000
+
+    constructor(data, containerEl, options) {
+        options = options ?? {}
         this.data = data
-        this.mainDiv = null
-        this.treeDiv = null
-        this.rows = []
+        this.mainEl = null
+        this.renderArrayLimit = options.limit ?? this.MAX_ARRAY_LIMIT
+        this.renderCount = 0
+        this.objectMap = []
+        this.updateStep = 30000
 
-        this.searchFoundRows = []
-        this.searchFoundRowIndex = 0
-        this.searchInfoDiv = null
-
-        this.searchTimeout = 500
-        this.searchTimer = 0
-
-        this.arrayLimit = 100
+        this.render(containerEl, options.depth || this.MAX_DEPTH, options.nav).then(() => null)
     }
 
-    // options: topBar, expandAll, arrayLimit
 
-    draw(parentElement, options) {
-        this.rows = []
-        this.rowCreate('', this.data, null, true)
+    //
 
-        options = options || {}
+    onObjectClick(e) {
+        let rowEl = e.currentTarget
+        this.expandObject(rowEl, e.altKey ? this.MAX_DEPTH : 0).then(() => null)
+    }
 
-        this.arrayLimit = options.arrayLimit || this.arrayLimit
+    onExpandAll() {
+        this.reRender(this.MAX_DEPTH).then(() => null)
+    }
 
-        this.mainDiv = add(div('jvv'), parentElement)
+    onCollapseAll() {
+        this.reRender(1).then(() => null)
+    }
 
-        if (options.topBar) {
-            this.drawTop()
-        }
-
-        this.drawTree(parentElement)
-
-        if (options.expandAll) {
-            this.expandAll()
-        } else {
-            this.rowExpand(this.rows[0])
-        }
+    onSelectAll() {
+        this.selectAll()
     }
 
     //
 
-    rowCreate(key, val, parentRow, isLast) {
-        let row = {parentRow, key, isLast, type: getType(val), val}
-
-        this.rowReset(row)
-
-        this.rows.push(row)
-        row.id = this.rows.length - 1
-
-        this.subRows(row)
-        return row
-    }
-
-    subRows(row) {
-        if (row.sub && row.sub.length > 0) {
-            return row.sub
-        }
-        if (row.type === t_object || row.type === t_array) {
-            row.sub = []
-            let pairs = Object.entries(row.val)
-            let n = 0
-            for (let [k, v] of pairs) {
-                row.sub.push(this.rowCreate(k, v, row, n === pairs.length - 1))
-            }
-            return row.sub
-        }
-        return []
-    }
-
-    rowReset(row) {
-        row.div = null
-        row.bodyDiv = null
-        row.keyDiv = null
-        row.valDiv = null
-        row.hasFullBody = (row.type !== t_array && row.type !== t_object)
-    }
-
-    rowDiv(row) {
-        if (row.div) {
-            return row.div
-        }
-
-        let isObj = row.type === t_object
-        let isArr = row.type === t_array
-
-        row.div = div('jvv-row')
-        row.div.id = 'jvvRow_' + row.id
-
-        let head = add(div('jvv-head'), row.div)
-
-        if (isObj || isArr) {
-            row.bodyDiv = add(div('jvv-body'), row.div)
-            let btn = add(elem('button', 'jvv-expand-button'), head)
-            btn.id = 'jvvExp_' + row.id
+    async expandObject(rowEl, depth) {
+        if (depth > 0 || rowEl.classList.contains('jvv-lazy')) {
+            await this.renderLazyObject(rowEl, depth)
         } else {
-            add(elem('button', 'jvv-dummy-button'), head)
-        }
-
-        if (row.id > 0) {
-            if (row.parentRow && row.parentRow.type === t_array) {
-                row.keyDiv = add(div('jvv-array-key', '[' + row.key + ']'), head)
-            } else {
-                row.keyDiv = add(div('jvv-object-key', row.key), head)
-            }
-        }
-
-        // key += ':' + row.id
-
-        if (isObj) {
-            add(this.drawPreview(row), head)
-            // add(div('jvv-paren', '{'), head)
-            // add(div('jvv-paren', '}'), add(div('jvv-foot'), row.div))
-        } else if (isArr) {
-            add(this.drawPreview(row), head)
-            // add(div('jvv-paren', '['), head)
-            // add(div('jvv-paren', ']'), add(div('jvv-foot'), row.div))
-        } else {
-            row.valDiv = add(this.drawValue(row), head)
-        }
-
-        return row.div
-    }
-
-    rowExpand(row) {
-        this.drawBody(row)
-        addClass(row.div, 'jvv-open')
-        this.rowExpandParents(row)
-    }
-
-    rowExpandParents(row) {
-        let path = []
-
-        while (row) {
-            path.push(row)
-            row = row.parentRow
-        }
-
-        path = path.reverse()
-
-        for (let i = 0; i < path.length - 1; i += 1) {
-            let par = path[i]
-            this.drawBody(par, {ensureSubRow: path[i + 1]})
-            addClass(par.div, 'jvv-open')
+            rowEl.classList.toggle('jvv-on')
         }
     }
 
-    rowCollapse(row) {
-        delClass(row.div, 'jvv-open')
-    }
-
-    expandAll() {
-        for (let row of this.rows) {
-            if (row.div) {
-                this.drawBody(row)
-                addClass(row.div, 'jvv-open')
-            }
-        }
-    }
-
-    collapseAll() {
-        for (let row of this.rows) {
-            this.rowReset(row)
-        }
-        this.treeDiv.innerHTML = ''
-        add(this.rowDiv(this.rows[0]), this.treeDiv)
-        this.rowExpand(this.rows[0])
-    }
-
-
-    rowFocus(row) {
-        this.rowExpandParents(row)
-        setTimeout(() => scrollTo(row.div), 100)
+    selectAll() {
+        let range = document.createRange()
+        range.selectNodeContents(this.mainEl.lastChild)
+        let sel = window.getSelection()
+        sel.removeAllRanges()
+        sel.addRange(range)
     }
 
     //
 
-    drawTop() {
-        let top = add(div('jvv-top'), this.mainDiv)
+    async render(containerEl, depth, nav) {
+        this.mainEl = this.div('jvv')
+        this.add(containerEl, this.mainEl)
 
-        let fb = add(div('jvv-search-box'), top)
-        add(elem('input'), fb)
-        add(elem('button', 'jvv-search-reset-button'), fb)
-
-        add(elem('button', 'jvv-search-prev-button'), top)
-        add(elem('button', 'jvv-search-next-button'), top)
-        this.searchInfoDiv = add(elem('span', 'jvv-search-info'), top)
-
-        add(div('jvv-flex'), top)
-
-        add(elem('button', 'jvv-expand-all-button'), top)
-        add(elem('button', 'jvv-collapse-all-button'), top)
-
-        top.querySelector('.jvv-search-box input').addEventListener('input', e => this.onSearchInput(e))
-        top.querySelector('.jvv-search-prev-button').addEventListener('click', e => this.onSearchPrev(e))
-        top.querySelector('.jvv-search-next-button').addEventListener('click', e => this.onSearchNext(e))
-        top.querySelector('.jvv-search-reset-button').addEventListener('click', e => this.onSearchReset(e))
-
-        top.querySelector('.jvv-expand-all-button').addEventListener('click', e => this.onExpandAll(e))
-        top.querySelector('.jvv-collapse-all-button').addEventListener('click', e => this.onCollapseAll(e))
-
+        if (nav) {
+            await this.renderNav()
+        }
+        await this.renderContent(depth)
     }
 
-    drawTree() {
-        this.treeDiv = add(div('jvv-tree'), this.mainDiv)
-        this.treeDiv.addEventListener('click', e => this.onTreeClick(e))
-        add(this.rowDiv(this.rows[0]), this.treeDiv)
+    async reRender(depth) {
+        this.mainEl.removeChild(this.mainEl.lastChild)
+        await this.renderContent(depth)
     }
 
-    drawPreview(row) {
-        if (row.type === t_array) {
-            let len = row.val.length
-            return div('jvv-preview', `[…] (${len})`)
+
+    renderNav() {
+        let nav = this.add(this.mainEl, this.div('jvv-nav'))
+
+        // let fb = add(div('jvv-search-box'), nav)
+        // this.add(this.elem('input'), fb)
+        // this.add(this.elem('button', 'jvv-search-reset-button'), fb)
+        //
+        // this.add(this.elem('button', 'jvv-search-prev-button'), nav)
+        // this.add(this.elem('button', 'jvv-search-next-button'), nav)
+        // this.searchInfoDiv = this.add(this.elem('span', 'jvv-search-info'), nav)
+        //
+        // this.add(div('jvv-flex'), nav)
+
+        // nav.querySelector('.jvv-search-box input').addEventListener('input', e => this.onSearchInput(e))
+        // nav.querySelector('.jvv-search-prev-button').addEventListener('click', e => this.onSearchPrev(e))
+        // nav.querySelector('.jvv-search-next-button').addEventListener('click', e => this.onSearchNext(e))
+        // nav.querySelector('.jvv-search-reset-button').addEventListener('click', e => this.onSearchReset(e))
+
+        let b
+
+        b = this.add(nav, this.span('jvv-button jvv-expand-all-button'))
+        b.title = 'Expand All'
+        b.addEventListener('click', e => this.onExpandAll(e))
+
+        b = this.add(nav, this.span('jvv-button jvv-collapse-all-button'))
+        b.title = 'Collapse All'
+        b.addEventListener('click', e => this.onCollapseAll(e))
+
+        b = this.add(nav, this.span('jvv-button jvv-select-all-button'))
+        b.title = 'Select All'
+        b.addEventListener('click', e => this.onSelectAll())
+    }
+
+    async renderContent(depth) {
+        this.objectMap = []
+        this.renderCount = 0
+
+        this.mainEl.classList.add('jvv-locked')
+
+        let contentEl = this.add(this.mainEl, this.div('jvv-content'))
+        await this.renderValue(contentEl, null, this.data, true, depth)
+
+        this.mainEl.classList.remove('jvv-locked')
+    }
+
+    async renderValue(parEl, key, val, isLast, depth) {
+        this.renderCount += 1
+
+        if (this.renderCount % this.updateStep === 0) {
+            await this.sleep(1)
         }
-        if (row.type === t_object) {
-            let len = Object.keys(row.val).length
-            return div('jvv-preview', `{…} (${len})`)
+
+        let t = this.getType(val)
+
+        switch (t) {
+            case this.T.undefined:
+                return this.renderAtom(parEl, key, '<undefined>', 'undefined', isLast)
+            case this.T.boolean:
+                return this.renderAtom(parEl, key, val, 'boolean', isLast)
+            case this.T.number:
+                return this.renderAtom(parEl, key, val, 'number', isLast)
+            case this.T.bigint:
+                return this.renderAtom(parEl, key, val, 'bigint', isLast)
+            case this.T.string:
+                return this.renderAtom(parEl, key, val, 'string', isLast)
+            case this.T.symbol:
+                return this.renderAtom(parEl, key, '<symbol>', 'symbol', isLast)
+            case this.T.function:
+                return this.renderAtom(parEl, key, '<function>', 'function', isLast)
+            case this.T.null:
+                return this.renderAtom(parEl, key, null, 'null', isLast)
+            case this.T.empty_object :
+                return this.renderAtom(parEl, key, {}, 'empty_object', isLast)
+            case this.T.empty_array :
+                return this.renderAtom(parEl, key, [], 'empty_array', isLast)
+            case this.T.array:
+            case this.T.object:
+                return this.renderObject(parEl, key, val, isLast, depth)
         }
     }
 
-    drawValue(row) {
-        switch (row.type) {
-            case t_undefined:
-                return div('jvv-val-undefined', 'undefined')
-            case t_boolean:
-                return div('jvv-val-boolean', String(row.val))
-            case t_number:
-                return div('jvv-val-number', String(row.val))
-            case t_bigint:
-                return div('jvv-val-bigint', String(row.val))
-            case t_string:
-                return div('jvv-val-string', JSON.stringify(row.val))
-            case t_symbol:
-                return div('jvv-val-symbol', 'symbol')
-            case t_function:
-                return div('jvv-val-function', 'function')
-            case t_null:
-                return div('jvv-val-null', 'null')
-            case t_empty_object :
-                return div('jvv-val-empty_object', '{}')
-            case t_empty_array :
-                return div('jvv-val-empty_array', '[]')
+    async renderAtom(parEl, key, val, kind, isLast) {
+        let rowEl = this.add(parEl, this.span('jvv-row jvv-' + kind))
+        if (key) {
+            this.add(rowEl, this.drawKey(key))
+        }
+        this.add(rowEl, this.span('jvv-value', JSON.stringify(val)))
+        if (!isLast) {
+            this.add(rowEl, this.drawPunct(','))
         }
     }
 
-    drawBody(row, args) {
-        this.rowDiv(row)
+    async renderObject(parEl, key, val, isLast, depth) {
+        let [isArray, iter, len] = this.objectProps(val)
 
-        if (row.hasFullBody) {
-            return
+        let ob = (isArray ? '[' : '{')
+        let cb = (isArray ? ']' : '}') + (isLast ? '' : ',')
+
+        let rowEl = this.add(parEl, this.span('jvv-row jvv-object'))
+
+        if (isArray) {
+            rowEl.dataset.after = '(' + len + ')'
         }
-        if (row.type === t_object) {
-            this.drawObjectBody(row)
-            return
+
+        if (key) {
+            this.add(rowEl, this.drawKey(key))
         }
-        if (row.type === t_array) {
-            this.drawArrayBody(row, args ?? {})
-            return
+        this.add(rowEl, this.drawPunct(ob))
+
+        rowEl.addEventListener('click', e => this.onObjectClick(e, rowEl))
+
+        let bodyEl = this.add(parEl, this.span('jvv-object-body'))
+        bodyEl.dataset.objectId = String(this.objectMap.length)
+        this.objectMap.push(val)
+
+        if (depth === 0) {
+            rowEl.classList.add('jvv-lazy')
+        } else {
+            rowEl.classList.add('jvv-loaded')
+            rowEl.classList.add('jvv-on')
+            await this.renderObjectBodyWithProps(bodyEl, val, depth - 1, isArray, iter, len)
         }
-        row.hasFullBody = true
+        this.add(parEl, this.drawPunct(cb))
     }
 
-    drawObjectBody(row) {
+    async renderLazyObject(rowEl, depth) {
+        rowEl.classList.remove('jvv-lazy')
+        rowEl.classList.add('jvv-loaded')
+        rowEl.classList.add('jvv-on')
 
-        let alignKeys = () => {
-            let w = 0
-            for (let subRow of this.subRows(row)) {
-                w = Math.max(w, subRow.keyDiv.scrollWidth)
-            }
-            for (let subRow of this.subRows(row)) {
-                subRow.keyDiv.style.minWidth = w + 'px'
-            }
-        }
+        let bodyEl = rowEl.nextSibling
+        bodyEl.innerHTML = ''
 
-        for (let subRow of this.subRows(row)) {
-            add(this.rowDiv(subRow), row.bodyDiv)
-        }
+        let objId = bodyEl.dataset.objectId
+        let val = this.objectMap[objId]
 
-        row.hasFullBody = true
-
-        setTimeout(alignKeys, 100)
+        await this.renderObjectBody(bodyEl, val, depth)
     }
 
-    drawArrayBody(row, args) {
-        // args.ensureSubRow -> make sure this sub row is drawn
-        // args.showMore     -> show next page
+    async renderObjectBody(bodyEl, val, depth) {
+        let [isArray, iter, len] = this.objectProps(val)
+        await this.renderObjectBodyWithProps(bodyEl, val, depth, isArray, iter, len)
+    }
 
+    async renderObjectBodyWithProps(bodyEl, val, depth, isArray, iter, len) {
+        let innerEl = this.add(bodyEl, this.span('jvv-object-body-inner'))
 
-        if (row.val.length <= this.arrayLimit) {
-            // short array, ignore args
-            for (let subRow of this.subRows(row)) {
-                add(this.rowDiv(subRow), row.bodyDiv)
-            }
-            row.hasFullBody = true
-            return
-        }
-
-        let visibleSubRows = []
-
-        for (let el of row.bodyDiv.getElementsByClassName('jvv-row')) {
-            let row = this.rowFromEl(el)
-            if (row) {
-                visibleSubRows.push(row)
-            }
-        }
-
-        let visibleIds = new Set(visibleSubRows.map(r => r.id))
-
-        if (args.ensureSubRow) {
-            if (!visibleIds.has(args.ensureSubRow.id)) {
-                visibleSubRows.push(args.ensureSubRow)
-                this.redrawArrayBody(row, visibleSubRows)
-            }
-            return
-        }
-
-        if (visibleSubRows.length > 0 && !args.showMore) {
-            return
-        }
-
-        let cntNew = 0
-
-        for (let subRow of this.subRows(row)) {
-            if (visibleIds.has(subRow.id)) {
-                continue
-            }
-            visibleSubRows.push(subRow)
-            cntNew += 1
-            if (cntNew >= this.arrayLimit) {
+        let n = 0
+        for (let [k, v] of iter) {
+            n += 1
+            if (n > this.renderArrayLimit) {
+                this.add(innerEl, this.drawMore(len - n + 1))
                 break
             }
+            await this.renderValue(innerEl, isArray ? null : k, v, n === len, depth)
         }
-
-        this.redrawArrayBody(row, visibleSubRows)
     }
 
-    redrawArrayBody(row, visibleSubRows) {
-        let more = this.rowMoreIndicator(row)
-        if (more) {
-            row.bodyDiv.removeChild(more)
+    objectProps(val) {
+        let isArray = Array.isArray(val)
+        let iter = isArray ? val.entries() : Object.entries(val)
+        let len = isArray ? val.length : iter.length
+        return [isArray, iter, len]
+    }
+
+    drawKey(key) {
+        return this.span('jvv-key', JSON.stringify(key) + ': ')
+    }
+
+    drawPunct(text, title) {
+        return this.span('jvv-punct', text)
+    }
+
+    drawMore(count) {
+        return this.span('jvv-more', '...(' + count + ')')
+    }
+
+    //
+
+    span(cls, text) {
+        return this.elem('span', cls, text)
+    }
+
+    div(cls) {
+        return this.elem('div', cls, '')
+    }
+
+    elem(tag, cls, text) {
+        let el = document.createElement(tag)
+        el.className = cls
+        if (text) {
+            el.textContent = text
         }
+        return el
+    }
 
-        visibleSubRows.sort((a, b) => a.id - b.id)
-
-        for (let visRow of visibleSubRows) {
-            row.bodyDiv.appendChild(this.rowDiv(visRow))
-        }
-
-        let rest = row.val.length - visibleSubRows.length
-
-        if (rest > 0) {
-            more = add(div('jvv-more', `…${rest} more`), row.bodyDiv)
-            more.id = 'jvvMore_' + row.id
+    add(parent, el) {
+        if (el) {
+            parent.appendChild(el)
+            return el
         }
     }
 
     //
 
-    rowsWithClass(cls) {
-        let rows = []
-
-        for (let div of this.treeDiv.querySelectorAll('.' + cls)) {
-            let row = this.rowFromEl(div)
-            if (row) {
-                rows.push(row)
-            }
-        }
-
-        return rows
+    T = {
+        undefined: 1,
+        boolean: 2,
+        number: 3,
+        bigint: 4,
+        string: 5,
+        symbol: 6,
+        function: 7,
+        null: 8,
+        object: 10,
+        empty_object: 11,
+        array: 12,
+        empty_array: 13,
     }
 
-    rowFromEl(el) {
-        return this.rows[el.id.split('_')[1]]
+    strT = {
+        'undefined': this.T.undefined,
+        'symbol': this.T.symbol,
+        'function': this.T.function,
+        'boolean': this.T.boolean,
+        'number': this.T.number,
+        'bigint': this.T.bigint,
+        'string': this.T.string,
     }
 
-    rowMoreIndicator(row) {
-        if (!row.bodyDiv) {
-            return
+    getType(val) {
+        let t = typeof val
+
+        if (this.strT[t]) {
+            return this.strT[t]
         }
-        let r = row.bodyDiv.getElementsByClassName('jvv-more')
-        return r.item(0)
+
+        if (!val) {
+            return this.T.null
+        }
+
+        if (Array.isArray(val)) {
+            return (val.length === 0) ? this.T.empty_array : this.T.array
+        }
+
+        for (let _ in val) {
+            return this.T.object
+        }
+
+        return this.T.empty_object
     }
 
     //
 
-    onTreeClick(e) {
-        let el = e.target
-
-        if (el.classList.contains('jvv-expand-button')) {
-            let row = this.rowFromEl(el)
-            if (row) {
-                if (row.div.classList.contains('jvv-open')) {
-                    this.rowCollapse(row)
-                } else {
-                    this.rowExpand(row)
-                }
-            }
-        }
-
-        if (el.classList.contains('jvv-more')) {
-            let row = this.rowFromEl(el)
-            if (row) {
-                this.drawArrayBody(row, {showMore: true})
-                setTimeout(() => scrollTo(this.rowMoreIndicator(row)), 100)
-            }
-        }
+    sleep(n) {
+        return new Promise(res => setTimeout(res, n))
     }
 
-    onExpandAll(e) {
-        this.expandAll()
-    }
-
-    onCollapseAll(e) {
-        this.collapseAll()
-    }
-
-
-    //
-
-    onSearchInput(e) {
-        clearTimeout(this.searchTimer)
-        this.searchTimer = setTimeout(() => this.searchExec(e.target.value), this.searchTimeout)
-    }
-
-    onSearchPrev(e) {
-        this.searchContinue(-1)
-    }
-
-    onSearchNext(e) {
-        this.searchContinue(+1)
-    }
-
-    onSearchReset(e) {
-        this.searchReset()
-        let inp = this.mainDiv.querySelector('.jvv-search-box input')
-        inp.value = ''
-        inp.rowFocus()
-    }
-
-    searchMatches(row, str) {
-        if (row.key.includes(str)) {
-            return true
-        }
-        if (row.type === t_string) {
-            return row.val.includes(str)
-        }
-        if (row.type === t_number) {
-            return String(row.val).includes(str)
-        }
-    }
-
-    searchExec(str) {
-        this.searchReset()
-
-        str = String(str).trim()
-        if (str.length === 0) {
-            return
-        }
-
-        this.searchFoundRows = this.rows.filter(r => this.searchMatches(r, str))
-        this.searchFoundRowIndex = 0
-
-        this.mainDiv.classList.add('jvv-has-search')
-
-        let len = this.searchFoundRows.length
-        if (len === 0) {
-            this.searchInfoDiv.textContent = '0/0'
-            return
-        }
-
-        this.mainDiv.classList.add('jvv-has-search-results')
-        this.searchGoto(0)
-    }
-
-    searchContinue(d) {
-        let len = this.searchFoundRows.length
-        if (len === 0) {
-            return
-        }
-
-        this.searchFoundRowIndex += d
-        if (this.searchFoundRowIndex < 0) {
-            this.searchFoundRowIndex = len - 1
-        }
-        if (this.searchFoundRowIndex >= len) {
-            this.searchFoundRowIndex = 0
-        }
-
-        this.searchGoto(this.searchFoundRowIndex)
-    }
-
-    searchGoto(n) {
-        this.searchFoundRowIndex = n
-        this.searchInfoDiv.textContent = (n + 1) + '/' + this.searchFoundRows.length
-        this.rowFocus(this.searchFoundRows[n])
-        this.searchHighlight()
-    }
-
-    searchHighlight() {
-        for (let row of this.rowsWithClass('jvv-found-curr')) {
-            delClass(row.div, 'jvv-found-curr')
-        }
-
-        for (let row of this.searchFoundRows) {
-            addClass(row.div, 'jvv-found')
-        }
-
-        let curr = this.searchFoundRows[this.searchFoundRowIndex]
-        if (curr) {
-            addClass(curr.div, 'jvv-found-curr')
-        }
-    }
-
-    searchReset() {
-        this.searchFoundRows = []
-        this.searchFoundRowIndex = 0
-        this.searchInfoDiv.textContent = ''
-
-        this.mainDiv.classList.remove('jvv-has-search')
-        this.mainDiv.classList.remove('jvv-has-search-results')
-
-        for (let row of this.rowsWithClass('jvv-found-curr')) {
-            delClass(row.div, 'jvv-found-curr')
-        }
-        for (let row of this.rowsWithClass('jvv-found')) {
-            delClass(row.div, 'jvv-found')
-        }
-    }
-}
-
-//
-
-
-function pause(n) {
-    return new Promise(r => setTimeout(r, n))
-}
-
-function div(cls, text) {
-    return elem('div', cls, text)
-}
-
-function elem(tag, cls, text) {
-    let e = document.createElement(tag)
-    e.className = cls
-    if (text) {
-        e.textContent = text
-    }
-    return e
-}
-
-function add(e, parent) {
-    parent.appendChild(e)
-    return e
-}
-
-function addClass(el, cls) {
-    if (el) {
-        el.classList.add(cls)
-    }
-}
-
-function delClass(el, cls) {
-    if (el) {
-        el.classList.remove(cls)
-    }
-}
-
-function scrollTo(el) {
-    if (el) {
-        el.scrollIntoView({
-            block: 'nearest',
-            behavior: 'instant',
-        })
-    }
-}
-
-
-const t_undefined = 1
-const t_boolean = 2
-const t_number = 3
-const t_bigint = 4
-const t_string = 5
-const t_symbol = 6
-const t_function = 7
-const t_null = 8
-
-const t_object = 10
-const t_empty_object = 11
-const t_array = 12
-const t_empty_array = 13
-
-const types = {
-    'undefined': t_undefined,
-    'symbol': t_symbol,
-    'function': t_function,
-    'boolean': t_boolean,
-    'number': t_number,
-    'bigint': t_bigint,
-    'string': t_string,
-}
-
-function getType(val) {
-    let t = typeof val
-    if (types[t])
-        return types[t]
-    if (!val)
-        return t_null
-    if (Array.isArray(val)) {
-        return (val.length === 0) ? t_empty_array : t_array
-    }
-    return (Object.keys(val).length === 0) ? t_empty_object : t_object
 }
