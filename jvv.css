@@ -53,7 +53,14 @@
 
 .jvv-row {
     display: block;
-    margin: 0.2em 0;
+    padding: 0.3em;
+    transition: background-color 1s ease;
+}
+
+.jvv-punct-row {
+    display: block;
+    padding: 0.3em;
+    transition: background-color 1s ease;
 }
 
 .jvv-row.jvv-object {
@@ -82,13 +89,20 @@
     transform: rotate(90deg);
 }
 
-.jvv-row.jvv-object:after {
+.jvv-row.jvv-array .jvv-key:after {
     content: attr(data-after);
-    font-size: 0.8em;
-    font-weight: 800;
-    padding-left: 0.5em;
+    font-size: 0.9em;
 }
 
+/* ---------------------------------------------------------------------------------- */
+
+.jvv.jvv-locked .jvv-nav {
+    display: none;
+}
+
+.jvv.jvv-locked .jvv-row.jvv-object:before {
+    display: none;
+}
 
 /* ---------------------------------------------------------------------------------- */
 
@@ -181,6 +195,10 @@
     background-color: #ebe5e5;
 }
 
+.jvv-row:hover, .jvv-punct-row:hover {
+    background-color: #eae7e3;
+}
+
 .jvv-row.jvv-object:before {
     background-color: transparent;
 }
@@ -194,17 +212,16 @@
     color: #a9a4a4;
 }
 
-.jvv-row.jvv-object:after {
-    color: #067df3;
-}
-
-
 .jvv-more {
     color: #464242;
 }
 
 .jvv-key {
-    color: #ce830d;
+    color: #cc8312;
+}
+
+.jvv-row.jvv-array .jvv-key:after {
+    color: #f99d0d;
 }
 
 .jvv-string .jvv-value {

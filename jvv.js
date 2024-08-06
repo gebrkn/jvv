@@ -3,46 +3,76 @@ class JsonViewer {
     MAX_DEPTH = 1000
     MAX_ARRAY_LIMIT = 20000
 
-    constructor(data, containerEl, options) {
-        options = options ?? {}
-        this.data = data
-        this.mainEl = null
-        this.renderArrayLimit = options.limit ?? this.MAX_ARRAY_LIMIT
-        this.renderCount = 0
-        this.objectMap = []
-        this.updateStep = 30000
+    DEFAULT_OPTIONS = {
+        navBar: false,
+        arrayLimit: this.MAX_ARRAY_LIMIT,
+        depth: 2,
+    }
 
-        this.render(containerEl, options.depth || this.MAX_DEPTH, options.nav).then(() => null)
+    constructor(data, containerEl, options) {
+        this.options = Object.assign({}, this.DEFAULT_OPTIONS, options ?? {})
+
+        this.data = data
+        this.containerEl = containerEl
+        this.mainEl = null
+        this.objectMap = []
+        this.renderCount = 0
+        this.renderUpdateStep = 5000
+
+        this.renderAll(this.options.depth || this.MAX_DEPTH).then(() => null)
     }
 
 
     //
 
     onObjectClick(e) {
+        if (this.isLocked()) {
+            return
+        }
+
         let rowEl = e.currentTarget
         this.expandObject(rowEl, e.altKey ? this.MAX_DEPTH : 0).then(() => null)
     }
 
     onExpandAll() {
-        this.reRender(this.MAX_DEPTH).then(() => null)
+        if (this.isLocked()) {
+            return
+        }
+        this.renderAll(this.MAX_DEPTH).then(() => null)
     }
 
     onCollapseAll() {
-        this.reRender(1).then(() => null)
+        if (this.isLocked()) {
+            return
+        }
+        this.renderAll(1).then(() => null)
     }
 
     onSelectAll() {
+        if (this.isLocked()) {
+            return
+        }
         this.selectAll()
     }
 
     //
 
     async expandObject(rowEl, depth) {
-        if (depth > 0 || rowEl.classList.contains('jvv-lazy')) {
-            await this.renderLazyObject(rowEl, depth)
-        } else {
-            rowEl.classList.toggle('jvv-on')
+        if (rowEl.classList.contains('jvv-on')) {
+            if (depth > 0) {
+                await this.unRenderLazyObject(rowEl)
+            }
+            rowEl.classList.remove('jvv-on')
+            return
         }
+
+        if (depth > 0 || rowEl.classList.contains('jvv-lazy')) {
+            this.beginRender()
+            await this.renderLazyObject(rowEl, depth)
+            this.endRender()
+        }
+
+        rowEl.classList.add('jvv-on')
     }
 
     selectAll() {
@@ -55,21 +85,28 @@ class JsonViewer {
 
     //
 
-    async render(containerEl, depth, nav) {
-        this.mainEl = this.div('jvv')
-        this.add(containerEl, this.mainEl)
+    isLocked() {
+        return this.mainEl && this.mainEl.classList.contains('jvv-locked')
+    }
 
-        if (nav) {
+    async renderAll(depth) {
+        this.containerEl.innerHTML = ''
+
+        this.mainEl = this.div('jvv')
+        this.add(this.containerEl, this.mainEl)
+
+        if (this.options.navBar) {
             await this.renderNav()
         }
-        await this.renderContent(depth)
-    }
 
-    async reRender(depth) {
-        this.mainEl.removeChild(this.mainEl.lastChild)
-        await this.renderContent(depth)
-    }
+        let contentEl = this.add(this.mainEl, this.div('jvv-content'))
 
+        this.objectMap = []
+
+        this.beginRender()
+        await this.renderValue(contentEl, null, this.data, true, depth)
+        this.endRender()
+    }
 
     renderNav() {
         let nav = this.add(this.mainEl, this.div('jvv-nav'))
@@ -104,22 +141,19 @@ class JsonViewer {
         b.addEventListener('click', e => this.onSelectAll())
     }
 
-    async renderContent(depth) {
-        this.objectMap = []
-        this.renderCount = 0
-
+    beginRender() {
         this.mainEl.classList.add('jvv-locked')
+        this.renderCount = 0
+    }
 
-        let contentEl = this.add(this.mainEl, this.div('jvv-content'))
-        await this.renderValue(contentEl, null, this.data, true, depth)
-
+    endRender() {
         this.mainEl.classList.remove('jvv-locked')
     }
 
     async renderValue(parEl, key, val, isLast, depth) {
         this.renderCount += 1
 
-        if (this.renderCount % this.updateStep === 0) {
+        if (this.renderCount % this.renderUpdateStep === 0) {
             await this.sleep(1)
         }
 
@@ -172,10 +206,11 @@ class JsonViewer {
         let rowEl = this.add(parEl, this.span('jvv-row jvv-object'))
 
         if (isArray) {
-            rowEl.dataset.after = '(' + len + ')'
-        }
-
-        if (key) {
+            rowEl.classList.add('jvv-array')
+            let keyEl = this.drawKey(key || '')
+            keyEl.dataset.after = '(' + len + ') '
+            this.add(rowEl, keyEl)
+        } else if (key) {
             this.add(rowEl, this.drawKey(key))
         }
         this.add(rowEl, this.drawPunct(ob))
@@ -193,7 +228,8 @@ class JsonViewer {
             rowEl.classList.add('jvv-on')
             await this.renderObjectBodyWithProps(bodyEl, val, depth - 1, isArray, iter, len)
         }
-        this.add(parEl, this.drawPunct(cb))
+
+        this.add(parEl, this.drawPunctRow(cb))
     }
 
     async renderLazyObject(rowEl, depth) {
@@ -210,6 +246,14 @@ class JsonViewer {
         await this.renderObjectBody(bodyEl, val, depth)
     }
 
+    async unRenderLazyObject(rowEl) {
+        rowEl.classList.add('jvv-lazy')
+        rowEl.classList.remove('jvv-loaded')
+
+        let bodyEl = rowEl.nextSibling
+        bodyEl.innerHTML = ''
+    }
+
     async renderObjectBody(bodyEl, val, depth) {
         let [isArray, iter, len] = this.objectProps(val)
         await this.renderObjectBodyWithProps(bodyEl, val, depth, isArray, iter, len)
@@ -221,7 +265,7 @@ class JsonViewer {
         let n = 0
         for (let [k, v] of iter) {
             n += 1
-            if (n > this.renderArrayLimit) {
+            if (n > this.options.arrayLimit) {
                 this.add(innerEl, this.drawMore(len - n + 1))
                 break
             }
@@ -237,11 +281,15 @@ class JsonViewer {
     }
 
     drawKey(key) {
-        return this.span('jvv-key', JSON.stringify(key) + ': ')
+        return this.span('jvv-key', key ? (JSON.stringify(key) + ': ') : '')
     }
 
     drawPunct(text, title) {
         return this.span('jvv-punct', text)
+    }
+
+    drawPunctRow(text, title) {
+        return this.span('jvv-punct-row', text)
     }
 
     drawMore(count) {
