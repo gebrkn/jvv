@@ -291,7 +291,7 @@ class JsonViewer {
 
         let searchBox = this.add(nav, this.span('jvv-search-box'))
 
-        this.searchInputEl = this.add(searchBox, this.elem('input'))
+        this.searchInputEl = this.add(searchBox, this.elem('input', 'jvv-search-input'))
         this.searchInputEl.addEventListener('input', e => this.onSearchInput(e))
         this.searchInputEl.value = ''
 
