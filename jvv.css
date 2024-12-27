@@ -12,13 +12,15 @@
 }
 
 .jvv-nav {
-    padding: 3px;
+    padding: 0.5em;
     position: absolute;
     top: 1em;
-    right: 2em;
+    right: 1em;
     z-index: 1;
-    border-radius: 10px;
+    border-radius: 6px;
     line-height: 1;
+    display: flex;
+    align-items: center;
 }
 
 .jvv-content {
@@ -30,6 +32,43 @@
 
 .jvv-flex {
     flex: 1;
+}
+
+/* ---------------------------------------------------------------------------------- */
+
+.jvv-search-box {
+    margin-right: 0.4em;
+    padding-right: 0.4em;
+    border-radius: 6px;
+    background: white;
+    display: flex;
+    align-items: center;
+}
+
+.jvv-search-box input {
+    width: 15em;
+    font-size: 0.8em;
+    border: none;
+    background: none;
+    padding: 0.4em 0.8em;
+    outline: none;
+}
+
+.jvv-search-info {
+    font-size: 0.8em;
+    padding: 0 2em 0 0.4em;
+}
+
+.jvv-button.jvv-search-prev-button,
+.jvv-button.jvv-search-next-button,
+.jvv-search-info {
+    display: none;
+}
+
+.jvv-has-search-results .jvv-button.jvv-search-prev-button,
+.jvv-has-search-results .jvv-button.jvv-search-next-button,
+.jvv-has-search-results .jvv-search-info {
+    display: inline-block;
 }
 
 /* ---------------------------------------------------------------------------------- */
@@ -47,6 +86,10 @@
     min-height: 20px;
     min-width: 20px;
     padding: 0 3px;
+}
+
+.jvv-button.jvv-search-reset-button {
+    background-size: 12px;
 }
 
 /* ---------------------------------------------------------------------------------- */
@@ -85,19 +128,25 @@
 
 }
 
-.jvv-row.jvv-on.jvv-object:before {
+.jvv-row.jvv-expanded.jvv-object:before {
     transform: rotate(90deg);
 }
 
-.jvv-row.jvv-array .jvv-key:after {
+.jvv-key:after {
     content: attr(data-after);
-    font-size: 0.9em;
+    font-size: 0.8em;
+}
+
+.jvv-key:before {
+    content: attr(data-before);
+    font-size: 0.8em;
 }
 
 /* ---------------------------------------------------------------------------------- */
 
-.jvv.jvv-locked .jvv-nav {
-    display: none;
+.jvv.jvv-locked .jvv-button {
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 .jvv.jvv-locked .jvv-row.jvv-object:before {
@@ -131,23 +180,14 @@
     font-weight: 800;
 }
 
-.jvv-row.jvv-on + .jvv-object-body:before {
+.jvv-row.jvv-expanded + .jvv-object-body:before {
     display: none;
 }
 
-.jvv-row.jvv-on + .jvv-object-body > .jvv-object-body-inner {
+.jvv-row.jvv-expanded + .jvv-object-body > .jvv-object-body-inner {
     display: block;
 }
 
-/* ---------------------------------------------------------------------------------- */
-
-.jvv.jvv-locked .jvv-row.jvv-object:before {
-    display: none;
-}
-
-.jvv.jvv-locked .jvv-nav {
-    display: none;
-}
 
 /* ---------------------------------------------------------------------------------- */
 
@@ -220,25 +260,30 @@
     color: #cc8312;
 }
 
-.jvv-row.jvv-array .jvv-key:after {
-    color: #f99d0d;
+.jvv-key:before {
+    color: #bc9292;
+    font-weight: bold;
 }
 
-.jvv-string .jvv-value {
-    color: #182d91;
-}
-
-.jvv-number .jvv-value {
-    color: #08852f;
-}
-
-.jvv-val-boolean {
-    color: #64481a;
-}
-
-.jvv-val-null {
-    color: #595959;
+.jvv-key:after {
+    color: #bc9292;
+    font-weight: bold;
 }
 
 .jvv-punct {
 }
+
+
+/* @formatter:off */
+.jvv-type-array .jvv-value { color: #000000;}
+.jvv-type-object .jvv-value { color: #000000;}
+.jvv-type-bigint .jvv-value { color: #08852f;}
+.jvv-type-number .jvv-value { color: #08852f;}
+.jvv-type-boolean .jvv-value { color: #64481a;}
+.jvv-type-string .jvv-value { color: #182d91;}
+.jvv-type-emptyarray .jvv-value { color: #878787;}
+.jvv-type-emptyobject .jvv-value { color: #878787;}
+.jvv-type-function .jvv-value { color: #878787;}
+.jvv-type-null .jvv-value { color: #878787;}
+.jvv-type-symbol .jvv-value { color: #878787;}
+.jvv-type-undefined .jvv-value { color: #878787;}
