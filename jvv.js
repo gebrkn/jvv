@@ -6,9 +6,10 @@ class JsonViewer {
 
     DEFAULT_OPTIONS = {
         navBar: false,
-        arrayLimit: 20_000,
+        arrayHints: false,
         depth: 2,
-        maxDepth: 1000,
+        arrayLimit: 20_000,
+        depthLimit: 1000,
         searchDelay: 100,
     }
 
@@ -44,7 +45,7 @@ class JsonViewer {
         }
 
         let rowEl = e.currentTarget
-        let depth = e.altKey ? this.options.maxDepth : 1
+        let depth = e.altKey ? this.options.depthLimit : 1
         this.nowait(this.toggleObject(rowEl, depth))
     }
 
@@ -52,7 +53,7 @@ class JsonViewer {
         if (this.isLocked()) {
             return
         }
-        this.nowait(this.renderContent(this.options.maxDepth))
+        this.nowait(this.renderContent(this.options.depthLimit))
     }
 
     onCollapseAll() {
@@ -336,6 +337,7 @@ class JsonViewer {
         let t = this.getType(val)
         let cls = 'jvv-value  jvv-type-' + this.nameT[t]
         let valueEl = this.span(cls)
+
         let [isHTML, s] = this.preparePrimitive(val, t)
 
         if (isHTML) {
@@ -382,17 +384,18 @@ class JsonViewer {
     }
 
     async renderObject(parEl, keys, val, isLast, depth) {
-        let [isArray, iter, len] = this.getObjectProps(val)
-
         let rowEl = this.drawRow(parEl, keys)
-
         this.add(parEl, this.span('jvv-object-body'))
+
+        let [isArray, iter, len] = this.getObjectProps(val)
 
         rowEl.classList.add('jvv-object')
 
         if (isArray) {
             rowEl.classList.add('jvv-array')
-            rowEl.firstChild.dataset.after = '(' + len + ') '
+            if (this.options.arrayHints) {
+                rowEl.firstChild.dataset.after = '(' + len + ') '
+            }
         }
 
         let ob = (isArray ? '[' : '{')
@@ -436,9 +439,7 @@ class JsonViewer {
 
     async unrenderObjectBody(rowEl) {
         let bodyEl = this.objectBodyElement(rowEl)
-        if (bodyEl) {
-            this.clear(bodyEl)
-        }
+        this.clear(bodyEl)
     }
 
     objectBodyElement(rowEl) {
@@ -477,7 +478,7 @@ class JsonViewer {
         let keyEl = this.span('jvv-key')
         let t = typeof key
 
-        if (t === 'number') {
+        if (t === 'number' && this.options.arrayHints) {
             keyEl.dataset.before = '[' + key + '] '
         } else if (t === 'string') {
             keyEl.textContent = JSON.stringify(key) + ': '
