@@ -280,15 +280,10 @@
 
 
 /* @formatter:off */
-.jvv-type-array .jvv-value { color: #000000;}
-.jvv-type-object .jvv-value { color: #000000;}
-.jvv-type-bigint .jvv-value { color: #08852f;}
-.jvv-type-number .jvv-value { color: #08852f;}
-.jvv-type-boolean .jvv-value { color: #64481a;}
-.jvv-type-string .jvv-value { color: #182d91;}
-.jvv-type-emptyarray .jvv-value { color: #878787;}
-.jvv-type-emptyobject .jvv-value { color: #878787;}
-.jvv-type-function .jvv-value { color: #878787;}
-.jvv-type-null .jvv-value { color: #878787;}
-.jvv-type-symbol .jvv-value { color: #878787;}
-.jvv-type-undefined .jvv-value { color: #878787;}
+.jvv-value.jvv-type-array  { color: #000000;}
+.jvv-value.jvv-type-object  { color: #000000;}
+.jvv-value.jvv-type-bigint  { color: #08852f;}
+.jvv-value.jvv-type-number  { color: #08852f;}
+.jvv-value.jvv-type-boolean  { color: #64481a;}
+.jvv-value.jvv-type-string  { color: #182d91;}
+.jvv-value.jvv-type-special  { color: #878787;}

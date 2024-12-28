@@ -12,8 +12,6 @@ class JsonViewer {
         searchDelay: 100,
     }
 
-    MARKER = '\x01'
-
     constructor(data, containerEl, options) {
         this.options = Object.assign({}, this.DEFAULT_OPTIONS, options ?? {})
 
@@ -115,7 +113,6 @@ class JsonViewer {
         this.lock()
 
         let text = this.searchPending.shift() || ''
-        console.log('runSearch', text)
 
         let searchRe = ''
         let searchResults = []
@@ -130,7 +127,6 @@ class JsonViewer {
         this.unlock()
 
         if (this.searchPending.length > 0) {
-            console.log('runSearch pending', this.searchPending.length)
             return this.runSearch()
         }
 
@@ -186,11 +182,9 @@ class JsonViewer {
             return
         }
 
-        console.log('showSearchResult', foundKeys)
-
         await this.renderContent(1)
 
-        let bodyEl = this.contentEl.firstChild?.nextSibling
+        let bodyEl = this.objectBodyElement(this.contentEl.firstChild)
         if (!bodyEl) {
             return
         }
@@ -206,11 +200,12 @@ class JsonViewer {
 
     //
 
-    async expandChain(parEl, foundKeys) {
-        for (let rowEl of parEl.querySelectorAll('.jvv-row')) {
+    async expandChain(bodyEl, foundKeys) {
+        for (let rowEl of bodyEl.querySelectorAll('.jvv-row')) {
             if (!rowEl.dataset || !rowEl.dataset.keys) {
                 continue
             }
+
             let keys = JSON.parse(rowEl.dataset.keys)
             let c = this.compareArrays(foundKeys, keys)
 
@@ -219,29 +214,21 @@ class JsonViewer {
             }
             if (c === 1 && rowEl.classList.contains('jvv-object')) {
                 await this.renderObjectBody(rowEl, 1)
-                let bodyEl = rowEl.nextSibling
-                return await this.expandChain(bodyEl, foundKeys)
+                return await this.expandChain(this.objectBodyElement(rowEl), foundKeys)
             }
         }
     }
 
-
     async toggleObject(rowEl, depth) {
         if (rowEl.classList.contains('jvv-expanded')) {
-            if (depth > 0) {
-                await this.unrenderObjectBody(rowEl)
-            }
+            await this.unrenderObjectBody(rowEl)
             rowEl.classList.remove('jvv-expanded')
             return
         }
 
-        if (depth > 0 || rowEl.classList.contains('jvv-lazy')) {
-            this.lock()
-            await this.renderObjectBody(rowEl, depth)
-            this.unlock()
-        }
-
-        rowEl.classList.add('jvv-expanded')
+        this.lock()
+        await this.renderObjectBody(rowEl, depth)
+        this.unlock()
     }
 
     selectAll() {
@@ -324,78 +311,88 @@ class JsonViewer {
             case this.T.number:
             case this.T.bigint:
             case this.T.string:
-                return this.renderPrimitive(parEl, keys, val, t, isLast)
-            case this.T.undefined:
-                return this.renderRaw(parEl, keys, '<undefined>', t, isLast)
-            case this.T.emptyobject :
-                return this.renderRaw(parEl, keys, '{}', t, isLast)
-            case this.T.emptyarray :
-                return this.renderRaw(parEl, keys, '[]', t, isLast)
-            case this.T.symbol:
-                return this.renderRaw(parEl, keys, '<symbol>', t, isLast)
+                return this.renderPrimitive(parEl, keys, val, isLast)
+            case this.T.emptyarray:
+            case this.T.emptyobject:
             case this.T.function:
-                return this.renderRaw(parEl, keys, '<function>', t, isLast)
             case this.T.null:
-                return this.renderRaw(parEl, keys, 'null', t, isLast)
+            case this.T.symbol:
+            case this.T.undefined:
+                return this.renderSpecial(parEl, keys, this.valueT[t], isLast)
             case this.T.array:
             case this.T.object:
                 return this.renderObject(parEl, keys, val, isLast, depth)
         }
     }
 
-    async renderRaw(parEl, keys, val, t, isLast) {
-        let rowEl = this.add(parEl, this.span('jvv-row jvv-type-' + this.nameT[t]))
-        rowEl.dataset.keys = JSON.stringify(keys)
-
-        if (keys.length > 0) {
-            this.add(rowEl, this.drawKey(keys[keys.length - 1]))
-        }
-
-        this.add(rowEl, this.span('jvv-value', val))
-
-        if (!isLast) {
-            this.add(rowEl, this.drawPunct(','))
-        }
+    renderSpecial(parEl, keys, val, isLast) {
+        let t = this.getType(val)
+        let cls = 'jvv-value  jvv-type-special'
+        let valueEl = this.span(cls, val)
+        this.drawSimpleRow(parEl, keys, valueEl, isLast)
     }
 
-    async renderPrimitive(parEl, keys, val, t, isLast) {
-        let s
+    renderPrimitive(parEl, keys, val, isLast) {
+        let t = this.getType(val)
+        let cls = 'jvv-value  jvv-type-' + this.nameT[t]
+        let valueEl = this.span(cls)
+        let [isHTML, s] = this.preparePrimitive(val, t)
 
+        if (isHTML) {
+            valueEl.innerHTML = s
+        } else {
+            valueEl.textContent = s
+        }
+
+        this.drawSimpleRow(parEl, keys, valueEl, isLast)
+    }
+
+    preparePrimitive(val, t) {
+        let s = this.tryStringify(val)
+
+        if (!this.searchRe) {
+            return [false, s]
+        }
+
+        let p = (t === this.T.string) ? s.slice(1, -1) : s
+
+        p = p.replace(this.searchRe, '\x01$&\x02')
+
+        if (!p.includes('\x01')) {
+            return [false, s]
+        }
+
+        if (t === this.T.string) {
+            p = '"' + p + '"'
+        }
+
+        p = this.escapeHTML(p)
+        p = p.replace(/\x01/g, '<mark>')
+        p = p.replace(/\x02/g, '</mark>')
+
+        return [true, p]
+    }
+
+    tryStringify(val) {
         try {
-            s = JSON.stringify(val)
-        } catch(e) {
-            s = String(val)
+            return JSON.stringify(val)
+        } catch (e) {
+            return String(val)
         }
-
-        if (t === this.T.string) {
-            s = s.slice(1, -1)
-        }
-
-        if (this.searchRe) {
-            s = s.replace(this.searchRe, this.MARKER + '$&' + this.MARKER)
-        }
-
-        if (t === this.T.string) {
-            s = '"' + s + '"'
-        }
-
-        return this.renderRaw(parEl, keys, s, t, isLast)
     }
 
     async renderObject(parEl, keys, val, isLast, depth) {
         let [isArray, iter, len] = this.getObjectProps(val)
 
-        let rowEl = this.add(parEl, this.span('jvv-row jvv-object'))
-        rowEl.dataset.keys = JSON.stringify(keys)
+        let rowEl = this.drawRow(parEl, keys)
 
-        let bodyEl = this.add(parEl, this.span('jvv-object-body'))
+        this.add(parEl, this.span('jvv-object-body'))
 
-        let key = keys.length > 0 ? keys[keys.length - 1] : null
-        let keyEl = this.add(rowEl, this.drawKey(key))
+        rowEl.classList.add('jvv-object')
 
         if (isArray) {
             rowEl.classList.add('jvv-array')
-            keyEl.dataset.after = '(' + len + ') '
+            rowEl.firstChild.dataset.after = '(' + len + ') '
         }
 
         let ob = (isArray ? '[' : '{')
@@ -403,9 +400,7 @@ class JsonViewer {
 
         rowEl.addEventListener('click', e => this.onObjectClick(e, rowEl))
 
-        if (depth === 0) {
-            rowEl.classList.add('jvv-lazy')
-        } else {
+        if (depth > 0) {
             await this.renderObjectBody(rowEl, depth)
         }
 
@@ -414,10 +409,12 @@ class JsonViewer {
     }
 
     async renderObjectBody(rowEl, depth) {
-        rowEl.classList.remove('jvv-lazy')
         rowEl.classList.add('jvv-expanded')
 
-        let bodyEl = rowEl.nextSibling
+        let bodyEl = this.objectBodyElement(rowEl)
+        if (!bodyEl) {
+            return
+        }
         this.clear(bodyEl)
 
         let keys = JSON.parse(rowEl.dataset.keys)
@@ -438,11 +435,43 @@ class JsonViewer {
     }
 
     async unrenderObjectBody(rowEl) {
-        rowEl.classList.add('jvv-lazy')
-        let bodyEl = rowEl.nextSibling
-        this.clear(bodyEl)
+        let bodyEl = this.objectBodyElement(rowEl)
+        if (bodyEl) {
+            this.clear(bodyEl)
+        }
     }
 
+    objectBodyElement(rowEl) {
+        if (!rowEl) {
+            return
+        }
+        let bodyEl = rowEl.nextSibling
+        if (bodyEl && bodyEl.classList.contains('jvv-object-body')) {
+            return bodyEl
+        }
+    }
+
+    //
+
+    drawRow(parEl, keys) {
+        let rowEl = this.add(parEl, this.span('jvv-row'))
+        rowEl.dataset.keys = JSON.stringify(keys)
+
+        let key = keys.length > 0 ? keys[keys.length - 1] : null;
+        this.add(rowEl, this.drawKey(key))
+
+        return rowEl
+    }
+
+    drawSimpleRow(parEl, keys, valueEl, isLast) {
+        let rowEl = this.drawRow(parEl, keys)
+
+        this.add(rowEl, valueEl)
+
+        if (!isLast) {
+            this.add(rowEl, this.drawPunct(','))
+        }
+    }
 
     drawKey(key) {
         let keyEl = this.span('jvv-key')
@@ -454,7 +483,6 @@ class JsonViewer {
             keyEl.textContent = JSON.stringify(key) + ': '
         }
         return keyEl
-
     }
 
     drawPunct(text, title) {
@@ -481,27 +509,14 @@ class JsonViewer {
 
     elem(tag, cls, text) {
         let el = document.createElement(tag)
-        el.className = cls
 
-        if (!text) {
-            return el
+        if (cls) {
+            el.className = cls
         }
 
-        if (!String(text).includes(this.MARKER)) {
+        if (text) {
             el.textContent = text
-            return el
         }
-
-        let parts = String(text).split(this.MARKER)
-
-        let a = document.createTextNode(parts[0] || '')
-        let b = document.createElement('mark')
-        b.textContent = parts[1] || ''
-        let c = document.createTextNode(parts.slice(2).join(''))
-
-        el.appendChild(a)
-        el.appendChild(b)
-        el.appendChild(c)
 
         return el
     }
@@ -561,6 +576,15 @@ class JsonViewer {
         [this.T.undefined]: 'undefined',
     }
 
+    valueT = {
+        [this.T.emptyarray]: '[]',
+        [this.T.emptyobject]: '{}',
+        [this.T.function]: '"<function>"',
+        [this.T.null]: 'null',
+        [this.T.symbol]: '"<symbol>"',
+        [this.T.undefined]: '"<undefined>"',
+    }
+
     getType(val) {
         let t = typeof val
 
@@ -613,6 +637,10 @@ class JsonViewer {
 
     escapeRe(str) {
         return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    }
+
+    escapeHTML(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     }
 
     async addTick() {
